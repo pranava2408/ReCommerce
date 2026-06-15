@@ -21,7 +21,7 @@ export function QuickDelivery() {
     // Defaulting to our mock user that we seeded in the backend
     const userId = "buyer-la-001";
     
-    fetch(`https://ballap-second-life-api.hf.space/api/buyer-deals/${userId}?lat=34.0522&lon=-118.2437`)
+    fetch(`http://127.0.0.1:8000/api/buyer-deals/${userId}?lat=34.0522&lon=-118.2437`)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch deals");
         return res.json();

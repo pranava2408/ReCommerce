@@ -218,7 +218,7 @@ export default function InitiateResell() {
       aiFormData.append("file", selectedImage);
 
       const aiResponse = await fetch(
-        "http://127.0.0.1:8000/ai/damage-detection",
+        "http://127.0.0.1:8001/ai/damage-detection",
         {
           method: "POST",
           body: aiFormData,
