@@ -1,0 +1,4 @@
+{
+    "python.formatting.provider": "yapf",
+    "prisma.pinToPrisma6": true
+}

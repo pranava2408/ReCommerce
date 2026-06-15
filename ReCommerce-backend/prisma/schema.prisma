@@ -1,0 +1,541 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/////////////////////////////////////////////////
+// AUTH
+/////////////////////////////////////////////////
+
+model User {
+  id              Int     @id @default(autoincrement())
+  email           String  @unique
+  name            String?
+  password        String
+  role            Role    @default(USER)
+  isEmailVerified Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile UserProfile?
+  tokens  Token[]
+
+  ownedItems Item[]
+  listings   MarketplaceListing[]
+  offers     PurchaseOffer[]
+  orders     Order[]
+
+  greenCredits    GreenCreditTransaction[]
+  recommendations ItemRecommendation[]
+}
+
+model UserProfile {
+  id String @id @default(cuid())
+
+  userId Int  @unique
+  user   User @relation(fields: [userId], references: [id])
+
+  latitude     Float
+  longitude    Float
+
+  greenCredits Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Token {
+  id          Int       @id @default(autoincrement())
+  token       String
+  type        TokenType
+  expires     DateTime
+  blacklisted Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+}
+
+/////////////////////////////////////////////////
+// LOCATION
+/////////////////////////////////////////////////
+
+model Location {
+  id String @id @default(cuid())
+
+  country String
+  state   String
+  city    String
+  pincode String?
+
+  latitude  Float?
+  longitude Float?
+
+  createdAt DateTime @default(now())
+
+  items    Item[]
+  listings MarketplaceListing[]
+}
+
+/////////////////////////////////////////////////
+// CATEGORY
+/////////////////////////////////////////////////
+
+model Category {
+  id String @id @default(cuid())
+
+  name String @unique
+
+  parentId String?
+
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+
+  items Item[]
+}
+
+/////////////////////////////////////////////////
+// ML MODELS
+/////////////////////////////////////////////////
+
+model MlModel {
+  id String @id @default(cuid())
+
+  name        String
+  version     String
+  description String?
+
+  createdAt DateTime @default(now())
+
+  inspections ItemInspection[]
+
+  @@unique([name, version])
+}
+
+/////////////////////////////////////////////////
+// ITEMS
+/////////////////////////////////////////////////
+
+model Item {
+  id String @id @default(cuid())
+
+  sku String @unique
+
+  name  String
+  brand String?
+
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  originalPrice Decimal @db.Decimal(10, 2)
+
+  metadata Json?
+
+  ownerId Int?
+  owner   User? @relation(fields: [ownerId], references: [id])
+
+  locationId String?
+  location   Location? @relation(fields: [locationId], references: [id])
+
+  status ItemStatus
+
+  currentInspectionId String? @unique
+
+  currentInspection ItemInspection? @relation("CurrentInspection", fields: [currentInspectionId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  images ItemImage[]
+
+  inspections ItemInspection[] @relation("ItemInspections")
+
+  listings MarketplaceListing[]
+
+  priceHistory ItemPriceHistory[]
+
+  lifecycleEvents ItemLifecycleEvent[]
+
+  greenCreditTransactions GreenCreditTransaction[]
+
+  recommendations ItemRecommendation[]
+
+  orders Order[]
+
+  @@index([status])
+  @@index([categoryId])
+  @@index([locationId])
+}
+
+/////////////////////////////////////////////////
+// ITEM IMAGES
+/////////////////////////////////////////////////
+
+model ItemImage {
+  id String @id @default(cuid())
+
+  itemId String
+  item   Item   @relation(fields: [itemId], references: [id])
+
+  imageUrl String
+
+  imageType ImageType
+
+  createdAt DateTime @default(now())
+
+  @@index([itemId])
+}
+
+/////////////////////////////////////////////////
+// INSPECTIONS
+/////////////////////////////////////////////////
+
+model ItemInspection {
+  id String @id @default(cuid())
+
+  itemId String
+
+  item Item @relation("ItemInspections", fields: [itemId], references: [id])
+
+  modelId String
+  model   MlModel @relation(fields: [modelId], references: [id])
+
+  conditionScore Float
+
+  confidenceScore Float
+
+  grade ItemGrade
+
+  recommendedAction RecommendedAction
+
+  safetyStatus SafetyStatus
+
+  notes String?
+
+  createdAt DateTime @default(now())
+
+  defects ItemDefect[]
+
+  currentForItem Item? @relation("CurrentInspection")
+
+  @@index([grade])
+  @@index([recommendedAction])
+  @@index([itemId])
+}
+
+/////////////////////////////////////////////////
+// DEFECTS
+/////////////////////////////////////////////////
+
+model ItemDefect {
+  id String @id @default(cuid())
+
+  inspectionId String
+
+  inspection ItemInspection @relation(fields: [inspectionId], references: [id])
+
+  defectType DefectType
+
+  severity Severity
+
+  confidence Float?
+
+  areaPercent Float?
+
+  bboxX      Float?
+  bboxY      Float?
+  bboxWidth  Float?
+  bboxHeight Float?
+
+  createdAt DateTime @default(now())
+
+  @@index([inspectionId])
+  @@index([defectType])
+}
+
+/////////////////////////////////////////////////
+// MARKETPLACE
+/////////////////////////////////////////////////
+
+model MarketplaceListing {
+  id String @id @default(cuid())
+
+  itemId String
+  item   Item   @relation(fields: [itemId], references: [id])
+
+  sellerId Int
+  seller   User @relation(fields: [sellerId], references: [id])
+
+  locationId String?
+  location   Location? @relation(fields: [locationId], references: [id])
+
+  title String
+
+  description String?
+
+  listingPrice Decimal @db.Decimal(10, 2)
+
+  status ListingStatus
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  offers PurchaseOffer[]
+  orders Order[]
+
+  @@index([status])
+  @@index([listingPrice])
+}
+
+/////////////////////////////////////////////////
+// PRICE HISTORY
+/////////////////////////////////////////////////
+
+model ItemPriceHistory {
+  id String @id @default(cuid())
+
+  itemId String
+  item   Item   @relation(fields: [itemId], references: [id])
+
+  oldPrice Decimal @db.Decimal(10, 2)
+  newPrice Decimal @db.Decimal(10, 2)
+
+  reason String?
+
+  createdAt DateTime @default(now())
+
+  @@index([itemId])
+}
+
+/////////////////////////////////////////////////
+// OFFERS
+/////////////////////////////////////////////////
+
+model PurchaseOffer {
+  id String @id @default(cuid())
+
+  listingId String
+  listing   MarketplaceListing @relation(fields: [listingId], references: [id])
+
+  buyerId Int
+  buyer   User @relation(fields: [buyerId], references: [id])
+
+  offerPrice Decimal @db.Decimal(10, 2)
+
+  status OfferStatus
+
+  createdAt DateTime @default(now())
+
+  @@index([buyerId])
+  @@index([listingId])
+}
+
+/////////////////////////////////////////////////
+// ORDERS
+/////////////////////////////////////////////////
+
+model Order {
+  id String @id @default(cuid())
+
+  listingId String
+  listing   MarketplaceListing @relation(fields: [listingId], references: [id])
+
+  itemId String
+  item   Item   @relation(fields: [itemId], references: [id])
+
+  buyerId Int
+  buyer   User @relation(fields: [buyerId], references: [id])
+
+  finalPrice Decimal @db.Decimal(10, 2)
+
+  status OrderStatus
+
+  @@index([listingId])
+  @@index([buyerId])
+  @@index([itemId])
+}
+
+/////////////////////////////////////////////////
+// GREEN CREDITS
+/////////////////////////////////////////////////
+
+model GreenCreditTransaction {
+  id String @id @default(cuid())
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+
+  itemId String?
+  item   Item?   @relation(fields: [itemId], references: [id])
+
+  credits Int
+
+  reason String
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+/////////////////////////////////////////////////
+// LIFECYCLE
+/////////////////////////////////////////////////
+
+model ItemLifecycleEvent {
+  id String @id @default(cuid())
+
+  itemId String
+  item   Item   @relation(fields: [itemId], references: [id])
+
+  eventType LifecycleEventType
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([itemId])
+}
+
+/////////////////////////////////////////////////
+// RECOMMENDATIONS
+/////////////////////////////////////////////////
+
+model ItemRecommendation {
+  id String @id @default(cuid())
+
+  itemId String
+  item   Item   @relation(fields: [itemId], references: [id])
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+
+  score Float
+
+  reason String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([itemId, userId])
+}
+
+/////////////////////////////////////////////////
+// ENUMS
+/////////////////////////////////////////////////
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum TokenType {
+  ACCESS
+  REFRESH
+  RESET_PASSWORD
+  VERIFY_EMAIL
+}
+
+enum ItemStatus {
+  RECEIVED
+  INSPECTING
+  INSPECTED
+  LISTED
+  SOLD
+  REFURBISHING
+  REFURBISHED
+  DONATED
+  RECYCLED
+  DISPOSED
+}
+
+enum ImageType {
+  FRONT
+  BACK
+  LEFT
+  RIGHT
+  TOP
+  BOTTOM
+  PACKAGE
+  DEFECT
+}
+
+enum DefectType {
+  SCRATCH
+  DENT
+  CRACK
+  DISCOLORATION
+  BROKEN_PART
+  MISSING_PART
+  PACKAGE_DAMAGE
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ItemGrade {
+  A
+  B
+  C
+  D
+}
+
+enum RecommendedAction {
+  RESELL
+  REFURBISH
+  DONATE
+  RECYCLE
+  DISPOSE
+}
+
+enum SafetyStatus {
+  SAFE
+  NEEDS_REVIEW
+  UNSAFE
+}
+
+enum ListingStatus {
+  DRAFT
+  ACTIVE
+  RESERVED
+  SOLD
+  EXPIRED
+  REMOVED
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  RETURNED
+}
+
+enum LifecycleEventType {
+  RECEIVED
+  INSPECTED
+  GRADED
+  LISTED
+  OFFER_RECEIVED
+  SOLD
+  REFURBISHED
+  DONATED
+  RECYCLED
+  DISPOSED
+}
